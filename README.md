@@ -100,4 +100,4 @@ cross-span combining/ZWJ sequences, hyperlinks and partial consumer writes.
 Native consumer tests check all 2,800 retained independent SGR, command stripping, palette
 quantization and rendered terminal-state reference cases. The expected values come
 from the former independent model; emitted ANSI is replayed by a separate GoML
-screen model. See [fixture provenance](../consumers/ansi/tests/data/README.md).
+screen model. See [fixture provenance](../../goml-dev/ecosystem/consumers/ansi/tests/data/README.md).
