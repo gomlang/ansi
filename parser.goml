@@ -94,11 +94,12 @@ impl Parser {
             self.state.set(ParserState { failed: true, pending: Vec::new(), ..state });
             return Result::Err(failure(state.offset, "input chunk limit exceeded"))
         }
+        let retained = state.pending.len();
         let data = state.pending;
         for value in input {
             data.push(value);
         }
-        match tokenize(data, state.offset, self.limits) {
+        match tokenize(data, state.offset, self.limits, retained) {
             Ok((tokens, remaining, consumed)) => {
                 self.state.set(
                     ParserState { pending: remaining, offset: state.offset + consumed, ..state },
@@ -132,7 +133,7 @@ fn decoded(data: Vec[byte], start: isize, end: isize, offset: isize) -> Result[s
     )
 }
 
-fn tokenize(data: Vec[byte], offset: isize, limits: Limits) -> Result[
+fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> Result[
     (Vec[Token], Vec[byte], isize),
     Error,
 ] {
@@ -186,7 +187,11 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits) -> Result[
                 );
                 at = end + 1;
             } else if kind == 93 || kind == 80 || kind == 88 || kind == 94 || kind == 95 {
-                let mut end = at + 2;
+                let mut end = if at == 0 && retained > 3 {
+                    retained - 1
+                } else {
+                    at + 2
+                };
                 let mut terminator = 0;
                 while end < data.len() {
                     if end - start >= limits.max_sequence_bytes {
@@ -264,7 +269,11 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits) -> Result[
             }
         }
     }
-    let remaining = data.as_slice().sub(at, data.len()).to_vec();
+    let remaining = if at == 0 {
+        data
+    } else {
+        data.as_slice().sub(at, data.len()).to_vec()
+    };
     if remaining.len() > limits.max_sequence_bytes {
         return Result::Err(failure(offset + at, "sequence limit exceeded"))
     }
