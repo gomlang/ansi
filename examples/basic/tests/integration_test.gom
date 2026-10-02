@@ -1,6 +1,6 @@
 package tests;
 
-use consumer::ansi as application;
+use ecosystem::ansi::examples::basic as application;
 use std::testing;
 use ecosystem::ansi as terminal_style;
 

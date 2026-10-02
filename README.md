@@ -97,7 +97,19 @@ Protocol semantics follow [XTerm control sequences](https://invisible-island.net
 Tests cover every attribute combination through all four profiles, fragmented
 UTF-8/CSI/OSC at every byte boundary, malformed/over-limit input, wide-cell clips,
 cross-span combining/ZWJ sequences, hyperlinks and partial consumer writes.
-Native consumer tests check all 2,800 retained independent SGR, command stripping, palette
+Native example tests check all 2,800 retained independent SGR, command stripping, palette
 quantization and rendered terminal-state reference cases. The expected values come
 from the former independent model; emitted ANSI is replayed by a separate GoML
-screen model. See [fixture provenance](consumer/tests/data/README.md).
+screen model. See [fixture provenance](examples/basic/tests/data/README.md).
+
+## Development and examples
+
+Requires GoML 0.1.55 or newer. The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
+
+```sh
+goml run --example basic
+goml test
+goml verify --timeout 300s
+```
+
+`goml test` builds the example and runs its tests. `goml verify` repeats the example checks as an independent module against an isolated registry snapshot. `(cd ../verification && just ecosystem-test ansi)` also retains the library-specific smoke and compatibility checks.
