@@ -79,3 +79,33 @@ fn snapshots_and_external_span_vectors_are_independent() -> () {
     snapshot.spans().clear();
     testing::assert_eq(snapshot.plain_text(), "first");
 }
+
+#[test]
+fn tabs_fill_remaining_columns_before_wrapping() -> () {
+    let style = ansi::Style::new().with_attribute(ansi::BOLD, true);
+    let link = testing::expect_ok(ansi::Hyperlink::new("https://example.org", "tabs"), "link");
+    for columns in 1..10 {
+        let text = ansi::StyledText::from_spans(
+            Vec::from_array([ansi::Span::new("a\tb", style).with_link(link)]),
+        );
+        let lines = testing::expect_ok(text.wrap(columns), "tab wrap");
+        let pieces = Vec::new();
+        for line in lines {
+            testing::assert(line.width() <= columns);
+            pieces.push(line.plain_text());
+            for span in line.spans() {
+                testing::assert_eq(span.style, style);
+                testing::assert(span.link == Option::Some(link));
+            }
+        }
+        testing::assert_eq(pieces.join(""), "a       b");
+    }
+    let lines = testing::expect_ok(ansi::StyledText::plain("a\tb").wrap(3), "narrow wrap");
+    testing::assert_eq(lines.len(), 3);
+    testing::assert_eq(lines[0].plain_text(), "a  ");
+    testing::assert_eq(lines[1].plain_text(), "   ");
+    testing::assert_eq(lines[2].plain_text(), "  b");
+    let lines = testing::expect_ok(ansi::StyledText::plain("1234567\tx").wrap(6), "partial tab");
+    testing::assert_eq(lines[1].plain_text(), "7     ");
+    testing::assert_eq(lines[2].plain_text(), "  x");
+}

@@ -1,0 +1,12 @@
+package tests;
+
+use ecosystem::ansi;
+use std::testing;
+
+#[test]
+fn imported_tab_layout_preserves_available_columns() -> () {
+    let lines = testing::expect_ok(ansi::StyledText::plain("中\tx").wrap(4), "wrap");
+    testing::assert_eq(lines[0].plain_text(), "中  ");
+    testing::assert_eq(lines[1].plain_text(), "    ");
+    testing::assert_eq(lines[2].plain_text(), "x");
+}
