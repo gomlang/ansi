@@ -300,45 +300,36 @@ impl StyledText {
                 column = 0;
                 continue
             }
-            let text = if part.text == "\t" {
-                " ".repeat(8 - column % 8)
-            } else {
-                part.text
-            };
-            let width = if part.text == "\t" {
-                text.byte_len()
+            if part.text == "\t" {
+                let spaces = 8 - column % 8;
+                for _ in 0..spaces {
+                    if column == columns {
+                        lines.push(line);
+                        line = StyledText::new();
+                        column = 0;
+                    }
+                    line.push(Span { text: " ", style: part.style, link: part.link });
+                    column += 1;
+                }
+                continue
+            }
+            let width = if part.width > columns {
+                1
             } else {
                 part.width
             };
-            if width > columns {
-                if column > 0 {
-                    lines.push(line);
-                    line = StyledText::new();
-                    column = 0;
-                }
-                if part.text == "\t" {
-                    for _ in 0..width {
-                        if column == columns {
-                            lines.push(line);
-                            line = StyledText::new();
-                            column = 0;
-                        }
-                        line.push(Span { text: " ", style: part.style, link: part.link });
-                        column += 1;
-                    }
-                } else {
-                    line.push(Span { text: "�", style: part.style, link: part.link });
-                    column = 1;
-                }
+            let text = if part.width > columns {
+                "�"
             } else {
-                if column + width > columns {
-                    lines.push(line);
-                    line = StyledText::new();
-                    column = 0;
-                }
-                line.push(Span { text, style: part.style, link: part.link });
-                column += width;
+                part.text
+            };
+            if column + width > columns {
+                lines.push(line);
+                line = StyledText::new();
+                column = 0;
             }
+            line.push(Span { text, style: part.style, link: part.link });
+            column += width;
         }
         lines.push(line);
         Result::Ok(lines)

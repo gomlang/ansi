@@ -79,7 +79,8 @@ eight-column stops.
 
 Clipping selects a column range on the first line. A partial wide-grapheme
 intersection becomes spaces of the intersecting width. Wrapping is a hard
-grapheme wrap preserving LF, styles and links; it expands tabs and replaces a
+grapheme wrap preserving LF, styles and links; tab expansion fills the current
+line and continues across wrapped lines, preserving every expanded space. It replaces a
 grapheme wider than the complete target line with U+FFFD. It always emits at least
 one line and preserves a trailing empty line. Word/line-break-aware plain text
 wrapping is available from `unicode_text`. Column arguments are checked and
