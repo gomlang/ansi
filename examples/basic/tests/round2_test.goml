@@ -1,0 +1,55 @@
+package tests;
+
+use ecosystem::ansi;
+use std::testing;
+
+#[test]
+fn fragmented_opaque_strings_retain_terminator_and_utf8_boundaries() -> () {
+    for kind in Vec::from_array(["]", "P", "X", "^", "_"]) {
+        let parser = ansi::Parser::new();
+        let body = "a中\u001b?".repeat(200);
+        let input = ("\u001b" + kind + body + "\u001b\\z\u001b]next\u0007").to_bytes();
+        let found = Vec::new();
+        for at in 0..input.len() {
+            for token in testing::expect_ok(parser.feed(input.slice(at, at + 1)), "byte feed") {
+                found.push(token);
+            }
+        }
+        testing::assert_ok(parser.finish());
+        let expected = if kind == "]" {
+            ansi::Token::Osc(body)
+        } else {
+            ansi::Token::StringControl(kind.byte_get(0), body)
+        };
+        round2_tokens(
+            found,
+            Vec::from_array([expected, ansi::Token::Text("z"), ansi::Token::Osc("next")]),
+        );
+    }
+}
+
+#[test]
+fn resumed_string_scans_preserve_bounds_poisoning_and_offsets() -> () {
+    let parser = testing::expect_ok(
+        ansi::Parser::with_limits(
+            ansi::Limits { max_sequence_bytes: 8, ..ansi::Limits::standard() },
+        ),
+        "bounded parser",
+    );
+    testing::assert_ok(parser.feed("pre\u001b]12345".to_bytes().as_slice()));
+    let error = testing::expect_err(parser.feed("\u001b\\".to_bytes().as_slice()), "over limit ST");
+    testing::assert_eq(error.offset, 3);
+    testing::assert_eq(parser.pending_bytes(), 0);
+    testing::assert_err(parser.feed("x".to_bytes().as_slice()));
+    parser.reset();
+    testing::assert_ok(parser.feed("\u001b]12345".to_bytes().as_slice()));
+    round2_tokens(
+        testing::expect_ok(parser.feed("\u0007".to_bytes().as_slice()), "exact BEL"),
+        Vec::from_array([ansi::Token::Osc("12345")]),
+    );
+    testing::assert_ok(parser.finish());
+}
+
+fn round2_tokens(actual: Vec[ansi::Token], expected: Vec[ansi::Token]) -> () {
+    testing::assert(actual == expected);
+}
