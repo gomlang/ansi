@@ -1,0 +1,59 @@
+package tests;
+
+use ecosystem::ansi;
+use ecosystem::unicode_text;
+use std::testing;
+
+#[test]
+fn custom_width_clipping_preserves_graphemes_styles_and_links() -> () {
+    let options = unicode_text::WidthOptions { ambiguous_wide: true, emoji_wide: false };
+    let style = ansi::Style::new().with_attribute(ansi::BOLD, true);
+    let link = testing::expect_ok(ansi::Hyperlink::new("https://example.org", "width"), "link");
+    let text = ansi::StyledText::from_spans(
+        Vec::from_array([ansi::Span::new("α👩‍💻z", style).with_link(link)]),
+    );
+    testing::assert_eq(text.width_with(options), 4);
+    testing::assert_eq(
+        testing::expect_ok(text.clip_with(1, 2, options), "partial cell").plain_text(),
+        " 👩‍💻",
+    );
+    let clipped = testing::expect_ok(text.truncate_with(3, options), "custom truncation");
+    testing::assert_eq(clipped.plain_text(), "α👩‍💻");
+    testing::assert_eq(clipped.width_with(options), 3);
+    for span in clipped.spans() {
+        testing::assert_eq(span.style, style);
+        testing::assert(span.link == Option::Some(link));
+    }
+    testing::assert_err(text.clip_with(-1, 2, options));
+    testing::assert_err(text.truncate_with(16777217, options));
+    testing::assert_eq(testing::expect_ok(text.truncate_with(0, options), "empty").plain_text(), "");
+}
+
+#[test]
+fn custom_wrap_respects_width_even_for_ambiguous_replacement_characters() -> () {
+    let options = unicode_text::WidthOptions { ambiguous_wide: true, emoji_wide: false };
+    let text = ansi::StyledText::plain("α👩‍💻z\n");
+    let lines = testing::expect_ok(text.wrap_with(3, options), "wrap");
+    testing::assert_eq(lines.len(), 3);
+    testing::assert_eq(lines[0].plain_text(), "α👩‍💻");
+    testing::assert_eq(lines[1].plain_text(), "z");
+    testing::assert_eq(lines[2].plain_text(), "");
+    for columns in 1..10 {
+        for line in testing::expect_ok(
+            ansi::StyledText::plain("α\t👩‍💻中").wrap_with(columns, options),
+            "width",
+        ) {
+            testing::assert(line.width_with(options) <= columns);
+        }
+    }
+    testing::assert_eq(
+        testing::expect_ok(text.wrap_with(1, options), "narrow")[0].plain_text(),
+        "?",
+    );
+    testing::assert_err(text.wrap_with(0, options));
+    let defaults = unicode_text::WidthOptions::new();
+    testing::assert_eq(
+        testing::expect_ok(text.clip(1, 2), "original").plain_text(),
+        testing::expect_ok(text.clip_with(1, 2, defaults), "default").plain_text(),
+    );
+}

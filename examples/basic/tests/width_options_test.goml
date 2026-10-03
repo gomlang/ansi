@@ -1,0 +1,22 @@
+package tests;
+
+use ecosystem::ansi;
+use ecosystem::unicode_text;
+use std::testing;
+
+#[test]
+fn downstream_layout_uses_the_same_policy_as_measurement() -> () {
+    let options = unicode_text::WidthOptions { ambiguous_wide: true, emoji_wide: false };
+    let text = ansi::StyledText::plain("α👩‍💻z");
+    testing::assert_eq(
+        testing::expect_ok(text.clip_with(2, 2, options), "clip").plain_text(),
+        "👩‍💻z",
+    );
+    testing::assert_eq(
+        testing::expect_ok(text.truncate_with(3, options), "truncate").width_with(options),
+        3,
+    );
+    let lines = testing::expect_ok(text.wrap_with(3, options), "wrap");
+    testing::assert_eq(lines.len(), 2);
+    testing::assert_eq(lines[0].plain_text(), "α👩‍💻");
+}

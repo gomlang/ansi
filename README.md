@@ -77,11 +77,17 @@ whole grapheme during layout. Default width uses Unicode 16 data, ambiguous
 width one and emoji width two. Width is the maximum line width; tabs advance to
 eight-column stops.
 
+`clip_with(start, columns, options)`, `truncate_with(columns, options)` and
+`wrap_with(columns, options)` accept the same `WidthOptions` as `width_with`.
+This keeps measurement and layout consistent for wide ambiguous characters or
+narrow emoji. Existing methods use the default width policy.
+
 Clipping selects a column range on the first line. A partial wide-grapheme
 intersection becomes spaces of the intersecting width. Wrapping is a hard
 grapheme wrap preserving LF, styles and links; tab expansion fills the current
 line and continues across wrapped lines, preserving every expanded space. It replaces a
-grapheme wider than the complete target line with U+FFFD. It always emits at least
+grapheme wider than the complete target line with U+FFFD (or `?` when the
+selected width policy makes U+FFFD too wide). It always emits at least
 one line and preserves a trailing empty line. Word/line-break-aware plain text
 wrapping is available from `unicode_text`. Column arguments are checked and
 limited to 16,777,216; storage for complete strings/span builders scales with

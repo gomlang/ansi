@@ -240,14 +240,30 @@ impl StyledText {
         self.clip(0, columns)
     }
 
+    pub fn truncate_with(self: StyledText, columns: isize, options: unicode_text::WidthOptions) -> Result[
+        StyledText,
+        Error,
+    ] {
+        self.clip_with(0, columns, options)
+    }
+
     pub fn clip(self: StyledText, start: isize, columns: isize) -> Result[StyledText, Error] {
+        self.clip_with(start, columns, unicode_text::WidthOptions::new())
+    }
+
+    pub fn clip_with(
+        self: StyledText,
+        start: isize,
+        columns: isize,
+        options: unicode_text::WidthOptions,
+    ) -> Result[StyledText, Error] {
         if start < 0 || columns < 0 || start > 16777216 || columns > 16777216 {
             return Result::Err(failure(0, "invalid clipping columns"))
         }
         let result = StyledText::new();
         let mut column = 0;
         let end = start + columns;
-        for part in self.graphemes(unicode_text::WidthOptions::new()) {
+        for part in self.graphemes(options) {
             if part.text == "\n" {
                 break
             }
@@ -287,13 +303,26 @@ impl StyledText {
     }
 
     pub fn wrap(self: StyledText, columns: isize) -> Result[Vec[StyledText], Error] {
+        self.wrap_with(columns, unicode_text::WidthOptions::new())
+    }
+
+    pub fn wrap_with(self: StyledText, columns: isize, options: unicode_text::WidthOptions) -> Result[
+        Vec[StyledText],
+        Error,
+    ] {
         if columns < 1 || columns > 16777216 {
             return Result::Err(failure(0, "invalid wrap width"))
         }
+        let replacement = if unicode_text::width_with("�", options) > columns {
+            "?"
+        } else {
+            "�"
+        };
+        let replacement_width = unicode_text::width_with(replacement, options);
         let lines = Vec::new();
         let mut line = StyledText::new();
         let mut column = 0;
-        for part in self.graphemes(unicode_text::WidthOptions::new()) {
+        for part in self.graphemes(options) {
             if part.text == "\n" {
                 lines.push(line);
                 line = StyledText::new();
@@ -314,12 +343,12 @@ impl StyledText {
                 continue
             }
             let width = if part.width > columns {
-                1
+                replacement_width
             } else {
                 part.width
             };
             let text = if part.width > columns {
-                "�"
+                replacement
             } else {
                 part.text
             };
