@@ -104,6 +104,98 @@ fn parser_limits_bound_retained_input_and_parameter_work() -> () {
 }
 
 #[test]
+fn resumed_csi_and_escape_scans_preserve_fields_and_alias_reset() -> () {
+    let valid = "pre\u001b[1;2::3$ qmiddle\u001b((((B\u001b[0m\u001b[1m";
+    let expected = canonical(testing::expect_ok(ansi::parse_tokens(valid), "whole sequences"));
+    let bytes = valid.to_bytes();
+    for size in Vec::from_array([1, 2, 3, 5, 17]) {
+        let parser = ansi::Parser::new();
+        let tokens = Vec::new();
+        let mut at = 0;
+        while at < bytes.len() {
+            let end = if at + size < bytes.len() {
+                at + size
+            } else {
+                bytes.len()
+            };
+            for token in testing::expect_ok(parser.feed(bytes.slice(at, end)), "fragment") {
+                tokens.push(token);
+            }
+            testing::assert_ok(parser.feed("".to_bytes().as_slice()));
+            at = end;
+        }
+        testing::assert_ok(parser.finish());
+        testing::assert_eq(canonical(tokens), expected);
+    }
+    let parser = ansi::Parser::new();
+    let alias = parser;
+    testing::assert_ok(parser.feed("text\u001b[1;2$".to_bytes().as_slice()));
+    testing::assert_eq(parser.pending_bytes(), 6);
+    alias.reset();
+    testing::assert_eq(parser.pending_bytes(), 0);
+    testing::assert_ok(parser.feed("\u001b((".to_bytes().as_slice()));
+    testing::assert_eq(
+        canonical(testing::expect_ok(alias.feed("B".to_bytes().as_slice()), "shared progress")),
+        canonical(Vec::from_array([ansi::Token::Escape("((B")])),
+    );
+    testing::assert_ok(alias.finish());
+}
+
+#[test]
+fn resumed_csi_and_escape_scans_preserve_limits_and_error_offsets() -> () {
+    let limits = ansi::Limits {
+        max_sequence_bytes: 8,
+        max_parameters: 2,
+        ..ansi::Limits::standard(),
+    };
+    for value in Vec::from_array(
+        [
+            "pre\u001b[1;2;3m",
+            "pre\u001b[1:2:3m",
+            "pre\u001b[1 $2m",
+            "pre\u001b((((\n",
+            "pre\u001b[123456m",
+            "pre\u001b[1     q",
+            "pre\u001b(((((((B",
+        ],
+    ) {
+        let whole = testing::expect_ok(ansi::Parser::with_limits(limits), "whole parser");
+        let expected = testing::expect_err(whole.feed(value.to_bytes().as_slice()), "whole error");
+        let bytes = value.to_bytes();
+        for split in 0..bytes.len() + 1 {
+            let parser = testing::expect_ok(ansi::Parser::with_limits(limits), "split parser");
+            let actual = match parser.feed(bytes.slice(0, split)) {
+                Err(error) => error,
+                Ok(_) => testing::expect_err(
+                    parser.feed(bytes.slice(split, bytes.len())),
+                    "split error",
+                ),
+            };
+            testing::assert_eq(actual, expected);
+            testing::assert_eq(parser.pending_bytes(), 0);
+            testing::assert_err(parser.finish());
+        }
+    }
+    for value in Vec::from_array(["\u001b[12345m", "\u001b[1    q", "\u001b((((((B"]) {
+        let parser = testing::expect_ok(ansi::Parser::with_limits(limits), "exact limit parser");
+        let tokens = Vec::new();
+        for byte in value.to_bytes() {
+            for token in testing::expect_ok(
+                parser.feed(Vec::from_array([byte]).as_slice()),
+                "exact limit byte",
+            ) {
+                tokens.push(token);
+            }
+        }
+        testing::assert_eq(
+            canonical(tokens),
+            canonical(testing::expect_ok(ansi::parse_tokens(value), "complete exact sequence")),
+        );
+        testing::assert_ok(parser.finish());
+    }
+}
+
+#[test]
 fn stripping_drops_commands_but_keeps_text_line_breaks_and_tabs() -> () {
     let value = "\u001b[2J\u001b[Hhello\u001b[31m red\u001b[0m\u0007\n\tworld\u001b]0;title\u0007\u001bPprivate\u001b\\";
     testing::assert_eq(

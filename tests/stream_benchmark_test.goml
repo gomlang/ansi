@@ -34,3 +34,59 @@ fn fragmented_control_string_scaling() -> () {
         );
     }
 }
+
+#[test]
+#[ignore]
+fn fragmented_csi_and_escape_scaling() -> () {
+    for csi in Vec::from_array([true, false]) {
+        for size in Vec::from_array([8192, 16384]) {
+            let started = time::Instant::now();
+            for _ in 0..3 {
+                let parser = testing::expect_ok(
+                    ansi::Parser::with_limits(
+                        ansi::Limits { max_sequence_bytes: 65536, ..ansi::Limits::standard() },
+                    ),
+                    "parser",
+                );
+                let prefix = if csi {
+                    "\u001b["
+                } else {
+                    "\u001b"
+                };
+                let fragment = if csi {
+                    "1"
+                } else {
+                    "("
+                };
+                testing::assert_ok(parser.feed(prefix.to_bytes().as_slice()));
+                let data = fragment.to_bytes();
+                for _ in 0..size {
+                    testing::assert_ok(parser.feed(data.as_slice()));
+                }
+                let tokens = testing::expect_ok(parser.feed("B".to_bytes().as_slice()), "final");
+                let expected = if csi {
+                    ansi::Token::Csi {
+                        parameters: fragment.repeat(size),
+                        intermediates: "",
+                        final_byte: 66,
+                    }
+                } else {
+                    ansi::Token::Escape(fragment.repeat(size) + "B")
+                };
+                testing::assert(tokens == Vec::from_array([expected]));
+                testing::assert_ok(parser.finish());
+            }
+            println(
+                (if csi {
+                    "CSI "
+                } else {
+                    "ESC "
+                })
+                    + size.to_string()
+                    + " bytes x3: "
+                    + started.elapsed().as_milliseconds().to_string()
+                    + " ms",
+            );
+        }
+    }
+}

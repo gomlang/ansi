@@ -41,8 +41,16 @@ impl Limits {
     }
 }
 
+struct SequenceScan {
+    next: isize,
+    // A negative end means CSI parameter bytes may still arrive in the next feed.
+    parameter_end: isize,
+    parameter_count: isize,
+}
+
 struct ParserState {
     pending: Vec[byte],
+    scan: Option[SequenceScan],
     offset: isize,
     ended: bool,
     failed: bool,
@@ -54,7 +62,7 @@ pub struct Parser {
 }
 
 fn fresh_parser_state() -> ParserState {
-    ParserState { pending: Vec::new(), offset: 0, ended: false, failed: false }
+    ParserState { pending: Vec::new(), scan: Option::None, offset: 0, ended: false, failed: false }
 }
 
 fn failure(offset: isize, message: string) -> Error {
@@ -99,10 +107,15 @@ impl Parser {
         for value in input {
             data.push(value);
         }
-        match tokenize(data, state.offset, self.limits, retained) {
-            Ok((tokens, remaining, consumed)) => {
+        match tokenize(data, state.offset, self.limits, retained, state.scan) {
+            Ok((tokens, remaining, consumed, scan)) => {
                 self.state.set(
-                    ParserState { pending: remaining, offset: state.offset + consumed, ..state },
+                    ParserState {
+                        pending: remaining,
+                        offset: state.offset + consumed,
+                        scan,
+                        ..state,
+                    },
                 );
                 Result::Ok(tokens)
             },
@@ -133,12 +146,16 @@ fn decoded(data: Vec[byte], start: isize, end: isize, offset: isize) -> Result[s
     )
 }
 
-fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> Result[
-    (Vec[Token], Vec[byte], isize),
-    Error,
-] {
+fn tokenize(
+    data: Vec[byte],
+    offset: isize,
+    limits: Limits,
+    retained: isize,
+    scan: Option[SequenceScan],
+) -> Result[(Vec[Token], Vec[byte], isize, Option[SequenceScan]), Error] {
     let tokens = Vec::new();
     let mut at = 0;
+    let mut remaining_scan = Option::None;
     while at < data.len() {
         let first = data[at];
         if first == 27 {
@@ -148,21 +165,32 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> 
             }
             let kind = data[at + 1];
             if kind == 91 {
-                let mut end = at + 2;
-                let mut count = 1;
-                while end < data.len() && data[end] >= 0x30 && data[end] <= 0x3f {
-                    if data[end] == 59 || data[end] == 58 {
-                        count += 1;
+                let initial = SequenceScan { next: 2, parameter_end: -1, parameter_count: 1 };
+                let previous = if at == 0 {
+                    scan.unwrap_or(initial)
+                } else {
+                    initial
+                };
+                let mut end = at + previous.next;
+                let mut count = previous.parameter_count;
+                let mut parameter_end = previous.parameter_end;
+                if parameter_end < 0 {
+                    while end < data.len() && data[end] >= 0x30 && data[end] <= 0x3f {
+                        if data[end] == 59 || data[end] == 58 {
+                            count += 1;
+                        }
+                        if count > limits.max_parameters {
+                            return Result::Err(failure(offset + end, "parameter limit exceeded"))
+                        }
+                        end += 1;
+                        if end - start > limits.max_sequence_bytes {
+                            return Result::Err(failure(offset + start, "sequence limit exceeded"))
+                        }
                     }
-                    if count > limits.max_parameters {
-                        return Result::Err(failure(offset + end, "parameter limit exceeded"))
-                    }
-                    end += 1;
-                    if end - start > limits.max_sequence_bytes {
-                        return Result::Err(failure(offset + start, "sequence limit exceeded"))
+                    if end < data.len() {
+                        parameter_end = end - at;
                     }
                 }
-                let parameter_end = end;
                 while end < data.len() && data[end] >= 0x20 && data[end] <= 0x2f {
                     end += 1;
                     if end - start > limits.max_sequence_bytes {
@@ -170,6 +198,9 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> 
                     }
                 }
                 if end == data.len() {
+                    remaining_scan = Option::Some(
+                        SequenceScan { next: end - at, parameter_end, parameter_count: count },
+                    );
                     break
                 }
                 if data[end] < 0x40 || data[end] > 0x7e {
@@ -180,8 +211,8 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> 
                 }
                 tokens.push(
                     Token::Csi {
-                        parameters: decoded(data, at + 2, parameter_end, offset)?,
-                        intermediates: decoded(data, parameter_end, end, offset)?,
+                        parameters: decoded(data, at + 2, at + parameter_end, offset)?,
+                        intermediates: decoded(data, at + parameter_end, end, offset)?,
                         final_byte: data[end],
                     },
                 );
@@ -223,7 +254,11 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> 
                 );
                 at = end + terminator;
             } else {
-                let mut end = at + 1;
+                let mut end = if at == 0 {
+                    scan.map(|value| value.next).unwrap_or(1)
+                } else {
+                    at + 1
+                };
                 while end < data.len() && data[end] >= 0x20 && data[end] <= 0x2f {
                     end += 1;
                     if end - start > limits.max_sequence_bytes {
@@ -231,6 +266,9 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> 
                     }
                 }
                 if end == data.len() {
+                    remaining_scan = Option::Some(
+                        SequenceScan { next: end - at, parameter_end: 0, parameter_count: 0 },
+                    );
                     break
                 }
                 if data[end] < 0x30 || data[end] > 0x7e {
@@ -277,7 +315,7 @@ fn tokenize(data: Vec[byte], offset: isize, limits: Limits, retained: isize) -> 
     if remaining.len() > limits.max_sequence_bytes {
         return Result::Err(failure(offset + at, "sequence limit exceeded"))
     }
-    Result::Ok((tokens, remaining, at))
+    Result::Ok((tokens, remaining, at, remaining_scan))
 }
 
 pub fn parse_tokens(value: string) -> Result[Vec[Token], Error] {

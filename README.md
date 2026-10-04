@@ -51,7 +51,10 @@ published. `pending_bytes` exposes retained incomplete input.
 parameter components. Its checked constructor bounds all limits. Plain text is
 emitted per feed; callers comparing different chunkings should coalesce adjacent
 text tokens. Parsing is strict about malformed sequences and invalid UTF-8;
-single-byte C1 mode is unsupported. Incomplete OSC/DCS/SOS/PM/APC strings retain their byte buffer and resume scanning at the previous tail, so byte-at-a-time control-string input takes linear scanning work; CSI parameter parsing still rescans an incomplete sequence within its configured bound. Opaque string payloads must also be UTF-8.
+single-byte C1 mode is unsupported. Incomplete sequences retain their byte buffer
+and resume scanning at the previous tail, including CSI parameter counts and
+the transition to intermediates. Byte-at-a-time escape and control-string input
+takes linear scanning work. Opaque string payloads must also be UTF-8.
 This tokenizer does not emulate terminal screen operations.
 
 `parse_tokens` parses a complete string. `strip` removes escape sequences and
@@ -112,9 +115,10 @@ quantization and rendered terminal-state reference cases. The expected values co
 from the former independent model; emitted ANSI is replayed by a separate GoML
 screen model. See [fixture provenance](examples/basic/tests/data/README.md).
 
-For an opt-in streaming control-string scaling measurement, run
-`goml test --ignored --nocapture fragmented_control_string_scaling`. It measures
-three single-byte-feed runs at 8 KiB and 16 KiB without timing assertions.
+For opt-in streaming scaling measurements, run
+`goml test --ignored --nocapture fragmented_`. The benchmarks measure three
+single-byte-feed runs at 8 KiB and 16 KiB for OSC strings, CSI parameters and ESC
+intermediates without timing assertions.
 
 ## Development and examples
 
