@@ -402,7 +402,7 @@ pub fn apply_sgr(style: Style, parameters: string) -> Result[Style, Error] {
     while index < groups.len() {
         let fields = groups[index].split(":");
         let code = numeric(fields[0])?;
-        if code == 38 || code == 48 {
+        if code == 38 || code == 48 || code == 58 {
             let mut value = Color::Default;
             if fields.len() > 1 {
                 let mode = numeric(fields[1])?;
@@ -440,11 +440,11 @@ pub fn apply_sgr(style: Style, parameters: string) -> Result[Style, Error] {
                     return Result::Err(failure(0, "invalid extended color parameters"))
                 }
             }
-            result = if code == 38 {
-                result.foreground(value)
-            } else {
-                result.background(value)
-            };
+            if code == 38 {
+                result = result.foreground(value);
+            } else if code == 48 {
+                result = result.background(value);
+            }
         } else if code == 0 {
             result = Style::new();
         } else if code == 1 {

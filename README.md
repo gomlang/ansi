@@ -58,9 +58,12 @@ This tokenizer does not emulate terminal screen operations.
 controls while retaining text, LF and tab. `parse` produces `StyledText`, applying
 SGR and OSC 8 hyperlinks and discarding other commands. SGR supports semicolon
 and colon extended colors; unsupported numeric attributes are ignored, while
-malformed supported color forms return an error. Underline variants normalize
-to one underline attribute; underline color, font selection and palette mutation
-are outside the style model.
+malformed recognized color forms return an error. Underline variants normalize
+to one underline attribute. Underline color (SGR 58) is validated and consumed as
+one color operation, then ignored, so its color components cannot alter other
+styles; SGR 59 is also ignored. Underline color, font selection and palette
+mutation are outside the style model. The SGR 58 encoding follows
+[kitty's underline protocol](https://sw.kovidgoyal.net/kitty/underlines/).
 
 `Span::new(text, style)` and `StyledText::push` sanitize terminal controls in
 ordinary text to U+FFFD, preserving LF/tab. Hyperlinks have checked URL/id fields,

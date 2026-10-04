@@ -98,6 +98,35 @@ fn extended_sgr_accepts_semicolon_and_colon_encodings() -> () {
 }
 
 #[test]
+fn ignored_underline_colors_do_not_change_other_sgr_attributes() -> () {
+    let initial = ansi::Style::new().foreground(ansi::Color::Indexed(3)).with_attribute(
+        ansi::ITALIC,
+        true,
+    );
+    for value in["58;5;1", "58;2;31;44;0", "58:5:1", "58:2:31:44:0", "58:2::31:44:0", "59"] {
+        testing::assert_eq(
+            testing::expect_ok(ansi::apply_sgr(initial, value), "ignored underline color"),
+            initial,
+        );
+        testing::assert_eq(
+            testing::expect_ok(ansi::apply_sgr(initial, value + ";1"), "following bold"),
+            initial.with_attribute(ansi::BOLD, true),
+        );
+    }
+    let parsed = testing::expect_ok(
+        ansi::parse("\u001b[3;33mA\u001b[58;2;31;44;0mB\u001b[58;5;1;1mC"),
+        "underline color sequence",
+    ).spans();
+    testing::assert_eq(parsed.len(), 3);
+    testing::assert_eq(parsed[0].style, initial);
+    testing::assert_eq(parsed[1].style, initial);
+    testing::assert_eq(parsed[2].style, initial.with_attribute(ansi::BOLD, true));
+    for value in["58", "58;5", "58;5;256", "58;2;1;2", "58:2::256:0:0"] {
+        testing::assert(ansi::apply_sgr(initial, value).is_err());
+    }
+}
+
+#[test]
 fn text_and_hyperlinks_cannot_inject_control_sequences() -> () {
     let styled = ansi::Style::new().foreground(ansi::Color::Indexed(1));
     testing::assert_eq(styled.paint("a\u001b[2Jb\u0007", ansi::Profile::Plain), "a�[2Jb�");
