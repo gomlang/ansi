@@ -90,3 +90,36 @@ fn fragmented_csi_and_escape_scaling() -> () {
         }
     }
 }
+
+#[test]
+#[ignore]
+fn safe_text_run_scaling() -> () {
+    for size in Vec::from_array([1024, 2048]) {
+        let clean = "Ready 界🙂e\u0301\n".repeat(size);
+        for control in Vec::from_array([false, true]) {
+            let source = clean
+                + if control {
+                    "\u001b"
+                } else {
+                    ""
+                };
+            let expected = clean
+                + if control {
+                    "�"
+                } else {
+                    ""
+                };
+            let started = time::Instant::now();
+            for _ in 0..100 {
+                testing::assert_eq(ansi::safe_text(source), expected);
+            }
+            println(
+                "safe_text " + source.byte_len().to_string() + " bytes, trailing control="
+                    + control.to_string()
+                    + " x100: "
+                    + started.elapsed().as_milliseconds().to_string()
+                    + " ms",
+            );
+        }
+    }
+}

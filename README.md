@@ -69,7 +69,9 @@ mutation are outside the style model. The SGR 58 encoding follows
 [kitty's underline protocol](https://sw.kovidgoyal.net/kitty/underlines/).
 
 `Span::new(text, style)` and `StyledText::push` sanitize terminal controls in
-ordinary text to U+FFFD, preserving LF/tab. Hyperlinks have checked URL/id fields,
+ordinary text to U+FFFD, preserving LF/tab. `safe_text` scans UTF-8 once and
+copies unchanged text in runs only when a control needs replacement; clean text
+is returned without reconstruction. Hyperlinks have checked URL/id fields,
 reject controls and bound URL/id lengths; the library does not open their URLs.
 `render_with_links` can disable OSC 8 independently of color. `Plain` always
 disables both styles and links. `write`/`write_line` use generic `std::io::Write`
@@ -119,6 +121,10 @@ For opt-in streaming scaling measurements, run
 `goml test --ignored --nocapture fragmented_`. The benchmarks measure three
 single-byte-feed runs at 8 KiB and 16 KiB for OSC strings, CSI parameters and ESC
 intermediates without timing assertions.
+
+`goml test --ignored --nocapture safe_text_run_scaling` compares clean Unicode
+text and a trailing control at two input sizes, with 100 sanitizations each and
+no timing assertions.
 
 ## Development and examples
 
