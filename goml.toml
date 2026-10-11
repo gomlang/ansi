@@ -2,8 +2,8 @@
 path = "ecosystem::ansi"
 
 [dependencies]
-"ecosystem::color" = "0.1.0"
-"ecosystem::unicode_text" = "0.1.0"
+"ecosystem::color" = true
+"ecosystem::unicode_text" = true
 
 [dev-dependencies]
-"ecosystem::verification" = "0.1.0"
+"ecosystem::verification" = true

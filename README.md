@@ -7,7 +7,7 @@ input. The terminal session chooses the output profile and hyperlink policy.
 
 ## Styles and color
 
-Declare `"ecosystem::ansi" = "0.1.0"` in the module-root dependencies.
+Declare `"ecosystem::ansi" = true` in the module-root dependencies.
 
 ```goml
 use ecosystem::ansi;
@@ -128,12 +128,12 @@ no timing assertions.
 
 ## Development and examples
 
-Requires GoML 0.1.56 or newer. The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
+Requires the [current GoML toolchain](https://github.com/gomlang/verification/blob/main/ci/toolchain.json) with unversioned registry support. The `examples/basic/` example shares the root manifest; test-only helpers are declared in `[dev-dependencies]`. From the library root, run:
 
 ```sh
 goml run --example basic
 goml test
-goml verify --timeout 300s
+(cd ../verification && just ecosystem-test ansi)
 ```
 
-`goml test` builds the example and runs its tests. `goml verify` repeats the example checks as an independent module against an isolated registry snapshot. `(cd ../verification && just ecosystem-test ansi)` also retains the library-specific smoke and compatibility checks.
+`goml test` builds the example and runs its tests. `(cd ../verification && just ecosystem-test ansi)` runs the library-specific smoke and compatibility checks.
