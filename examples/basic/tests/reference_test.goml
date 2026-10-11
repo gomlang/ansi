@@ -1,14 +1,20 @@
 package tests;
 
-use ecosystem::verification::reference;
+use ecosystem::testkit::reference;
 use std::encoding::hex;
+use std::fs;
+use std::env;
 use std::testing;
 
 #[test]
 fn independent_sgr_palette_and_rendered_screen_oracle() -> () {
-    let fixture = reference::load();
+    let fixture = reference::load(fixture_path("tests/data/reference.json"));
     let output = testing::expect_ok(
-        reference::run("ansi", "--oracle", reference::text(reference::field(fixture, "input"))),
+        reference::run(
+            example_binary(),
+            "--oracle",
+            reference::text(reference::field(fixture, "input")),
+        ),
         "ANSI reference protocol",
     );
     let rows = output.trim_end().split("\n");
@@ -40,5 +46,25 @@ fn independent_sgr_palette_and_rendered_screen_oracle() -> () {
             testing::assert_eq(screen.foreground(), "default");
             testing::assert_eq(screen.background(), "default");
         }
+    }
+}
+
+fn fixture_path(path: string) -> string {
+    if fs::is_dir("examples/basic") {
+        "examples/basic/" + path
+    } else {
+        path
+    }
+}
+
+fn example_binary() -> string {
+    if let Ok(binary) = env::var_structured("GOML_VERIFY_BINARY") {
+        return binary
+    }
+    let example = "_artifact/bin/examples/basic/basic";
+    if fs::is_file(example) {
+        example
+    } else {
+        "_artifact/bin/ansi"
     }
 }
